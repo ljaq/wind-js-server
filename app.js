@@ -61,45 +61,42 @@ app.get('/wind/latest', cors(corsOptions), function (req, res) {
 });
 
 app.get('/wind/nearest', cors(corsOptions), function (req, res, next) {
-  var time = req.query.timeIso;
-  var limit = req.query.searchLimit;
-  var searchForwards = false;
+  const time = req.query.timeIso;
+  const limit = parseInt(req.query.searchLimit) || 1; // 默认值设为 1
+  let searchForwards = false;
 
-  /**
-   * Find and return the nearest available 6 hourly pre-parsed JSON data
-   * If limit provided, searches backwards to limit, then forwards to limit before failing.
-   *
-   * @param targetMoment {Object} UTC moment
-   */
   function sendNearestTo(targetMoment) {
-    if (limit && Math.abs(moment.utc(time).diff(targetMoment, 'days')) >= limit) {
+    // 精确到小时判断是否超出限制
+    const hoursDiff = Math.abs(moment.utc(time).diff(targetMoment, 'hours'));
+    if (limit && hoursDiff >= limit * 24) {
       if (!searchForwards) {
         searchForwards = true;
-        sendNearestTo(moment(targetMoment).add(limit, 'days'));
+        // 从初始时间开始向前搜索
+        sendNearestTo(moment.utc(time).add(limit * 24, 'hours'));
         return;
       } else {
         return next(new Error('No data within searchLimit'));
       }
     }
 
-    var stamp = moment(targetMoment).format('YYYYMMDD') + roundHours(moment(targetMoment).hour(), 6);
-    var fileName = __dirname + '/json-data/' + stamp + '.json';
+    const roundedHour = roundHours(targetMoment.hour(), 6);
+    const stamp = targetMoment.format('YYYYMMDD') + roundedHour.toString().padStart(2, '0');
+    const fileName = path.join(__dirname, 'json-data', `${stamp}.json`);
 
-    res.setHeader('Content-Type', 'application/json');
-    res.sendFile(fileName, {}, function (err) {
+    res.sendFile(fileName, (err) => {
       if (err) {
-        var nextTarget = searchForwards
-          ? moment(targetMoment).add(6, 'hours')
-          : moment(targetMoment).subtract(6, 'hours');
+        const nextTarget = searchForwards
+          ? targetMoment.clone().add(6, 'hours')
+          : targetMoment.clone().subtract(6, 'hours');
         sendNearestTo(nextTarget);
       }
     });
   }
 
-  if (time && moment(time).isValid()) {
+  if (time && moment.utc(time).isValid()) {
     sendNearestTo(moment.utc(time));
   } else {
-    return next(new Error('Invalid params, expecting: timeIso=ISO_TIME_STRING'));
+    next(new Error('Invalid timeIso'));
   }
 });
 
