@@ -3,3 +3,4 @@
 LIB_DIR=$(dirname "$0")/../lib
 LAUNCH_JAR=$LIB_DIR/grib2json-*.jar
 /usr/bin/java -Xmx512M -jar $LAUNCH_JAR $@
+# /opt/homebrew/opt/openjdk/bin/java -Xmx512M -jar $LAUNCH_JAR $@
